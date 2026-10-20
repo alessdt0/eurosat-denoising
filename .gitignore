@@ -1,0 +1,26 @@
+# Ambienti virtuali
+.venv/
+.env
+
+# Dataset e dati locali
+data/
+
+# Output degli esperimenti
+outputs/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Cache Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Configurazioni locali
+.DS_Store
+.vscode/
+.idea/
