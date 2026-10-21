@@ -1,12 +1,16 @@
-name: eurosat
+name: eurosat-clean
 channels:
-  - defaults
+  - pytorch
+  - conda-forge
 dependencies:
   - python=3.11
+  - numpy
   - matplotlib
   - scikit-learn
-  - numpy
+  - scikit-image
   - jupyter
-  - torchvision
-  - pytorch
-prefix: /home/alessandro/anaconda3/envs/eurosat
+  - ipykernel
+  - pip
+  - pip:
+      - torch
+      - torchvision
