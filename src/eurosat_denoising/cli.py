@@ -8,6 +8,7 @@ from .training import fit, evaluate
 from .utils import seed_everything
 
 def main():
+ """Run a complete experiment from the command line."""
  p=argparse.ArgumentParser(description='Train/evaluate EuroSAT denoising models')
  p.add_argument('--data',default='data'); p.add_argument('--output',default='outputs'); p.add_argument('--model',choices=['ae','vae'],default='ae'); p.add_argument('--epochs',type=int,default=5); p.add_argument('--batch-size',type=int,default=128); p.add_argument('--noise-std',type=float,default=.15); p.add_argument('--download',action='store_true'); args=p.parse_args()
  seed_everything(42); device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'); base,(train,val,test)=make_datasets(args.data,args.noise_std,download=args.download)
