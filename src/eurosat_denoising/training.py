@@ -32,18 +32,25 @@ def run_epoch(model, loader, device, optimizer=None, vae=False, beta=1e-4):
     return {'loss': total / count, 'reconstruction': rec_total / count, 'kl': kl_total / count}
 
 def evaluate(model, loader, device, vae=False):
-    """Valuta su un test set fisso MSE globale, PSNR e SSIM per immagine."""
+    """Valuta su un test set fisso MSE globale, PSNR, SSIM per immagine e KL per il VAE."""
     # Metodologia di valutazione: niente dropout/batchnorm, niente gradienti.
-    model.eval(); sse = pixels = 0; ssims = []
+    model.eval(); sse = pixels = 0; ssims = []; kl_total = kl_count = 0
     with torch.no_grad():
         for noisy, clean in loader:
+            noisy, clean = noisy.to(device), clean.to(device)
             # Con il VAE si usa sample=False (media del posterior) per metriche deterministiche.
-            out = model(noisy.to(device), sample=False) if vae else model(noisy.to(device))
-            prediction = out[0] if vae else out
+            kl = 0.0
+            if vae:
+                prediction, mu, logvar = model(noisy, sample=False)
+                # KL tra la posteriore q(z|y) e il prior normale N(0, I).
+                kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                kl_total += kl.item() * len(noisy); kl_count += len(noisy)
+            else:
+                prediction = model(noisy)
             prediction = prediction.cpu(); sse += (prediction - clean).square().sum().item(); pixels += prediction.numel(); ssims.extend(ssim_scores(prediction, clean))
     # MSE globale = SSE / numero di pixel; PSNR = 10 * log10(1 / MSE).
     value = sse / pixels
-    return {'mse': value, 'psnr': float('inf') if value == 0 else 10 * torch.log10(torch.tensor(1 / value)).item(), 'ssim_mean': sum(ssims) / len(ssims), 'ssim_std': torch.tensor(ssims).std(unbiased=False).item()}
+    return {'mse': value, 'psnr': float('inf') if value == 0 else 10 * torch.log10(torch.tensor(1 / value)).item(), 'ssim_mean': sum(ssims) / len(ssims), 'ssim_std': torch.tensor(ssims).std(unbiased=False).item(), 'kl': (kl_total / kl_count) if kl_count else 0.0}
 
 def fit(model, train_loader, val_loader, device, epochs=5, lr=1e-3, path=None, vae=False, beta=1e-4, patience=3):
     """Addestra il modello con early stopping e checkpoint sul validation set."""

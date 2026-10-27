@@ -12,7 +12,7 @@ def test_noise_range_and_shape():
     # Crea un batch di immagini casuali in [0, 1].
     x=torch.rand(2,3,64,64); y=add_gaussian_noise(x,.15)
     # Verifica che forma e range dei valori restino validi dopo il rumore.
-    assert y.shape == x.shape and 0 <= y.min() and y.max() <= 1
+    assert y.shape == x.shape and 0 <= y.min() and y.max() <= 1                                     
 
 def test_model_shapes():
     """Entrambi i modelli devono ricostruire l'immagine rumorosa di input."""

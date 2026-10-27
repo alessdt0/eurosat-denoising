@@ -21,9 +21,30 @@ pytest -q
 
 Use `--epochs`, `--batch-size`, `--noise-std`, `--data`, and `--output` to reproduce or extend experiments. Results and checkpoints are written to `outputs/`, which is ignored by Git.
 
+## Sweep sperimentale
+
+For the AE vs VAE comparison across multiple degradation levels, use the `--sweep` mode:
+
+```bash
+python -m eurosat_denoising.cli --sweep --noise-stds 0.05,0.15,0.30 --blur-sigma 1.0 --epochs 5 --models ae,vae
+```
+
+Available options: `--noise-stds` (comma-separated list of Gaussian noise levels, default `0.05,0.15,0.30`), `--blur-sigmas` (comma-separated list of Gaussian blur sigmas, default `1.0`; use an empty value like `--blur-sigmas ""` for no blur), `--models` (comma-separated list, default `ae,vae`), `--beta`, `--epochs`, `--batch-size`.
+
+Every experiment is saved to `outputs/sweep/<model>_noise_<sigma>_blur_<sigma>_epochs_<n>_beta_<b>_seed_<s>.json` with all experimental parameters and metrics (mse, psnr, ssim_mean, ssim_std, kl, baseline_mse, baseline_psnr). The filename embeds the experimental parameters, so different experiments never overwrite each other.
+
+## Report automatico
+
+```bash
+python -m eurosat_denoising.report --sweep-dir outputs/sweep --output-dir outputs/report
+```
+
+The report validates all sweep JSONs (required fields, filename/parameter coherence, metric sanity, baseline consistency, complete AE/VAE pairs), prints the experiment table and the AE vs VAE comparison, and saves `results.csv`, `summary.json`, `validation.txt` plus PNG plots (PSNR/MSE/SSIM bars, PSNR gain vs baseline, PSNR vs noise, AE vs VAE scatter). The notebook `notebooks/04_sweep_analysis.ipynb` uses the same functions for an interactive exploration.
+
+
 ## Notebooks
 
-Run `01_explore_and_degrade.ipynb`, `02_autoencoder_training.ipynb`, and `03_experiments_and_vae.ipynb` in order. They are exploratory views of the same task; the reusable implementation is in `src/eurosat_denoising` and the CLI is the canonical, non-notebook entrypoint.
+Run `01_explore_and_degrade.ipynb`, `02_autoencoder_training.ipynb`, `03_experiments_and_vae.ipynb`, and `04_sweep_analysis.ipynb` in order. They are exploratory views of the same task; the reusable implementation is in `src/eurosat_denoising` and the CLI is the canonical, non-notebook entrypoint.
 
 ## Experimental protocol
 
