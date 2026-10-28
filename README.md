@@ -26,12 +26,33 @@ Use `--epochs`, `--batch-size`, `--noise-std`, `--data`, and `--output` to repro
 For the AE vs VAE comparison across multiple degradation levels, use the `--sweep` mode:
 
 ```bash
-python -m eurosat_denoising.cli --sweep --noise-stds 0.05,0.15,0.30 --blur-sigma 1.0 --epochs 5 --models ae,vae
+python -m eurosat_denoising.cli --sweep --noise-stds 0.05,0.15,0.30 --blur-sigmas 1.0 --epochs 5 --models ae,vae
 ```
 
-Available options: `--noise-stds` (comma-separated list of Gaussian noise levels, default `0.05,0.15,0.30`), `--blur-sigmas` (comma-separated list of Gaussian blur sigmas, default `1.0`; use an empty value like `--blur-sigmas ""` for no blur), `--models` (comma-separated list, default `ae,vae`), `--beta`, `--epochs`, `--batch-size`.
+Available options: `--noise-stds` (comma-separated list of Gaussian noise levels, default `0.05,0.15,0.30`), `--blur-sigmas` (comma-separated list of Gaussian blur sigmas, default `1.0`; use an empty value like `--blur-sigmas ""` for no blur), `--models` (comma-separated list of architectures: `ae`, `vae`, `ae_skip`, `ae_skip32`, `ae_wide`, `ae_latent128`; default `ae,vae`), `--beta`, `--epochs`, `--batch-size`, `--overwrite`.
 
-Every experiment is saved to `outputs/sweep/<model>_noise_<sigma>_blur_<sigma>_epochs_<n>_beta_<b>_seed_<s>.json` with all experimental parameters and metrics (mse, psnr, ssim_mean, ssim_std, kl, baseline_mse, baseline_psnr). The filename embeds the experimental parameters, so different experiments never overwrite each other.
+Every experiment is saved to `outputs/sweep/<arch>_noise_<sigma>_blur_<sigma>_epochs_<n>_beta_<b>_seed_<s>.json` with all experimental parameters and metrics (mse, psnr, ssim_mean, ssim_std, kl, val_mse, val_psnr, val_ssim_mean, val_ssim_std, n_params, baseline_mse, baseline_psnr). The filename embeds the experimental parameters, so different experiments never overwrite each other; if a JSON already exists the experiment is skipped (pass `--overwrite` to replace it). Every run is seeded independently, so different architectures see the same batch order and the same training noise.
+
+## Ricerca della configurazione dell'autoencoder
+
+La traccia chiede la *migliore configurazione dell'autoencoder*: le varianti architetturali si confrontano su una griglia ridotta e si sceglie il vincitore sul **validation set**, mai sul test.
+
+```bash
+python -m eurosat_denoising.cli --sweep --models ae,ae_skip,ae_skip32,ae_wide,ae_latent128 \
+    --noise-stds 0.05,0.15 --blur-sigmas 0.5 --epochs 5 --sweep-dir outputs/sweep_arch
+python -m eurosat_denoising.arch_report --sweep-dir outputs/sweep_arch --output-dir outputs/report_arch
+```
+
+| Architettura | Descrizione |
+| --- | --- |
+| `ae` | AutoEncoder di riferimento (2.17 M parametri, latente 64) |
+| `ae_skip` | Skip a 16x16 che aggira il collo di bottiglia (2.24 M) |
+| `ae_skip32` | Skip a 16x16 e a 32x32, tipo U-Net-lite (2.26 M) |
+| `ae_wide` | Più canali nell'encoder (2.22 M) |
+| `ae_latent128` | Latente 128 invece di 64 (4.26 M) |
+| `vae` | VAE con latente 64 (3.22 M) |
+
+`arch_report` stampa la tabella per architettura (parametri, PSNR di validation e di test, SSIM, guadagno sulla baseline), ordina per PSNR di validation e salva `arch_summary.json`, `arch_validation.txt`, `arch_psnr.png` e `arch_psnr_by_condition.png`.
 
 ## Report automatico
 

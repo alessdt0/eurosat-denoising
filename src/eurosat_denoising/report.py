@@ -32,6 +32,11 @@ MODELS = ("ae", "vae")
 METRIC_LABELS = {"mse": "MSE", "psnr": "PSNR (dB)", "ssim_mean": "SSIM", "kl": "KL"}
 
 
+def arch_of(record):
+    """Nome dell'architettura; per i record piu' vecchi ricade sulla famiglia."""
+    return record.get("arch") or record.get("model")
+
+
 def load_results(sweep_dir):
     """Carica tutti i JSON di esperimento presenti in ``sweep_dir``."""
     sweep_dir = Path(sweep_dir)
@@ -59,6 +64,10 @@ def validate_results(results):
     if not results:
         return ["Nessun risultato trovato: eseguire prima lo sweep."]
     seen = {}
+    # Famiglie presenti nell'insieme: il confronto AE/VAE si richiede solo se
+    # il report contiene davvero entrambe (una cartella di sole varianti AE
+    # serve alla ricerca architetturale e non ha un VAE da confrontare).
+    families = {record.get("model") for record in results if record.get("model") in MODELS}
     for record in results:
         source = record.get("_source", "<sconosciuto>")
         missing = [field for field in REQUIRED_FIELDS if field not in record]
@@ -69,7 +78,9 @@ def validate_results(results):
         expected = experiment_filename(record)
         if expected != source:
             issues.append(f"{source}: nome file non coerente con i parametri (atteso: {expected})")
-        key = tuple(record[field] for field in CONFIG_FIELDS)
+        # L'architettura fa parte della chiave: piu' varianti possono condividere
+        # la stessa configurazione di degrado senza essere duplicati.
+        key = (arch_of(record),) + tuple(record[field] for field in CONFIG_FIELDS)
         if key in seen:
             issues.append(f"{source}: configurazione duplicata di {seen[key]}")
         seen[key] = source
@@ -89,8 +100,8 @@ def validate_results(results):
     for (noise_std, blur_sigma), group in groups.items():
         if len({round(r["baseline_mse"], 12) for r in group}) > 1 or len({round(r["baseline_psnr"], 9) for r in group}) > 1:
             issues.append(f"baseline incoerente per noise={noise_std:g}, blur={blur_sigma}: possibili split o seed diversi")
-        present = {record["model"] for record in group}
-        if present != set(MODELS):
+        present = {record.get("model") for record in group}
+        if len(families) > 1 and present != families:
             issues.append(f"confronto incompleto per noise={noise_std:g}, blur={blur_sigma}: modelli presenti {sorted(present)}")
     # Tutti gli esperimenti devono usare lo stesso protocollo per un confronto equo.
     protocols = {(record.get("epochs"), record.get("beta"), record.get("seed")) for record in results}
@@ -102,10 +113,12 @@ def validate_results(results):
 def experiment_table(results):
     """Costruisce le righe della tabella riassuntiva degli esperimenti."""
     rows = []
-    for record in sorted(results, key=lambda r: (r["noise_std"], r["blur_sigma"] is not None, r["blur_sigma"] or 0.0, r["model"])):
+    for record in sorted(results, key=lambda r: (r["noise_std"], r["blur_sigma"] is not None, r["blur_sigma"] or 0.0, arch_of(r))):
         baseline_psnr = record.get("baseline_psnr")
         rows.append({
             "model": record["model"],
+            "arch": arch_of(record),
+            "n_params": record.get("n_params"),
             "noise_std": record["noise_std"],
             "blur_sigma": record["blur_sigma"],
             "epochs": record["epochs"],
@@ -125,6 +138,8 @@ def experiment_table(results):
 # Colonne della tabella testuale: nome interno, intestazione, larghezza, formato.
 _TABLE_FIELDS = (
     ("model", "mod", 4, "{}"),
+    ("arch", "arch", 12, "{}"),
+    ("n_params", "params", 10, "{:,}"),
     ("noise_std", "noise", 5, "{:g}"),
     ("blur_sigma", "blur", 5, "{:g}"),
     ("epochs", "ep", 3, "{}"),

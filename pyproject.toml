@@ -10,3 +10,4 @@ where = ["src"]
 [project.scripts]
 eurosat-denoise = "eurosat_denoising.cli:main"
 eurosat-report = "eurosat_denoising.report:main"
+eurosat-arch-report = "eurosat_denoising.arch_report:main"

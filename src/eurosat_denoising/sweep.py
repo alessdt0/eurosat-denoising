@@ -17,8 +17,8 @@ from sklearn.model_selection import train_test_split
 from .data import SplitConfig
 # Importa le metriche di denoising.
 from .metrics import mse, psnr
-# Importa i modelli di AutoEncoder e VAE.
-from .models import ConvAutoencoder, ConvVAE
+# Importa le architetture disponibili e i relativi helper.
+from .models import ARCH_FAMILY, build_model, count_parameters, is_vae_arch
 # Importa le funzioni di training e valutazione.
 from .training import fit, evaluate
 # Importa le funzioni di degradazione e dataset.
@@ -56,6 +56,8 @@ class SweepConfig:
     batch_size: int = SWEEP_BATCH_SIZE
     # Se True il rumore viene applicato dopo il blur; altrimenti prima.
     blur_after_noise: bool = False
+    # Se True sovrascrive i JSON gia' presenti; di default salta gli esperimenti fatti.
+    overwrite: bool = False
 
 
 def make_corruption(noise_std, blur_sigma=None, kernel_size=5, blur_after_noise=False):
@@ -101,7 +103,10 @@ def experiment_filename(record):
     """Costruisce il nome univoco del file di output per ogni esperimento."""
     blur = record.get("blur_sigma")
     blur_part = "none" if blur is None else f"{blur:g}"
-    return f"{record['model']}_noise_{record['noise_std']:g}_blur_{blur_part}_epochs_{record['epochs']}_beta_{record['beta']:g}_seed_{record['seed']}.json"
+    # Il prefisso e' l'architettura (es. ``ae_skip``): i record piu' vecchi non
+    # hanno il campo ``arch`` e ricadono sul nome della famiglia (``ae``/``vae``).
+    arch = record.get("arch") or record["model"]
+    return f"{arch}_noise_{record['noise_std']:g}_blur_{blur_part}_epochs_{record['epochs']}_beta_{record['beta']:g}_seed_{record['seed']}.json"
 
 
 def run_sweep(config: SweepConfig, root, output_dir=None, download: bool = False):
@@ -120,22 +125,43 @@ def run_sweep(config: SweepConfig, root, output_dir=None, download: bool = False
     out_dir.mkdir(parents=True, exist_ok=True)
     results = []
     for model_name in config.models:
+        # Famiglia del modello (ae/vae) e flag per la loss con termine KL.
+        family, is_vae = ARCH_FAMILY[model_name], is_vae_arch(model_name)
         for noise_std in config.noise_stds:
             for blur_sigma in config.blur_sigmas:
+                # Nome del file calcolato prima del training: se l'esperimento
+                # esiste gia' viene saltato senza sprecare tempo di calcolo.
+                stub = {
+                    'model': family, 'arch': model_name, 'noise_std': noise_std,
+                    'blur_sigma': blur_sigma, 'epochs': config.epochs,
+                    'beta': config.beta, 'seed': config.seed,
+                }
+                path = out_dir / experiment_filename(stub)
+                if path.exists() and not config.overwrite:
+                    print(f"[sweep] esistente, salto {path}")
+                    continue
                 corruption = make_corruption(noise_std, blur_sigma, blur_after_noise=config.blur_after_noise)
+                # Ri-inizializza i semi a ogni esperimento: shuffle dei batch e
+                # rumore di training cosi' sono identici tra architetture diverse,
+                # quindi il confronto non dipende dall'ordine degli esperimenti.
+                seed_everything(config.seed)
                 train = NoisyCleanDataset(base, list(train_idx), corruption)
                 val = NoisyCleanDataset(base, list(val_idx), corruption, VAL_SEED)
                 test = NoisyCleanDataset(base, list(test_idx), corruption, TEST_SEED)
                 train_loader = DataLoader(train, config.batch_size, shuffle=True, num_workers=0)
                 val_loader = DataLoader(val, config.batch_size, shuffle=False, num_workers=0)
                 test_loader = DataLoader(test, config.batch_size, shuffle=False, num_workers=0)
-                is_vae = model_name == 'vae'
-                model = (ConvVAE() if is_vae else ConvAutoencoder()).to(device)
+                model = build_model(model_name).to(device)
                 fit(model, train_loader, val_loader, device, epochs=config.epochs, path=None, vae=is_vae, beta=config.beta)
+                # Valutazione sul validation: e' il set su cui si sceglie la
+                # configurazione, mentre il test serve solo a riportare i risultati.
+                validation = evaluate(model, val_loader, device, vae=is_vae)
                 result = evaluate(model, test_loader, device, vae=is_vae)
                 baseline_mse, baseline_psnr = _baseline_scores(test_loader, device)
                 record = {
-                    'model': model_name,
+                    'model': family,
+                    'arch': model_name,
+                    'n_params': count_parameters(model),
                     'noise_std': noise_std,
                     'blur_sigma': blur_sigma,
                     'epochs': config.epochs,
@@ -147,10 +173,13 @@ def run_sweep(config: SweepConfig, root, output_dir=None, download: bool = False
                     'ssim_mean': result['ssim_mean'],
                     'ssim_std': result['ssim_std'],
                     'kl': result.get('kl', 0.0),
+                    'val_mse': validation['mse'],
+                    'val_psnr': validation['psnr'],
+                    'val_ssim_mean': validation['ssim_mean'],
+                    'val_ssim_std': validation['ssim_std'],
                     'baseline_mse': baseline_mse,
                     'baseline_psnr': baseline_psnr,
                 }
-                path = out_dir / experiment_filename(record)
                 path.write_text(json.dumps(record, indent=2))
                 results.append(record)
                 print(f"[sweep] salvato {path}")

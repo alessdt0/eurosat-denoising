@@ -1,4 +1,3 @@
-from pathlib import Path
 import torch
 from torch import nn
 from .metrics import mse, psnr, ssim_scores
@@ -55,7 +54,7 @@ def evaluate(model, loader, device, vae=False):
 def fit(model, train_loader, val_loader, device, epochs=5, lr=1e-3, path=None, vae=False, beta=1e-4, patience=3):
     """Addestra il modello con early stopping e checkpoint sul validation set."""
     # Ottimizzatore Adam per i parametri del modello.
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr); history = {'train': [], 'validation': [], 'reconstruction': [], 'kl': []}; best = float('inf'); stale = 0
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr); history = {'train': [], 'validation': [], 'reconstruction': [], 'kl': []}; best = float('inf'); stale = 0; best_state = None
     # Addestra per un numero massimo di epoche.
     for epoch in range(epochs):
         # Passata di training con calcolo dei gradienti e aggiornamento dei pesi.
@@ -65,11 +64,14 @@ def fit(model, train_loader, val_loader, device, epochs=5, lr=1e-3, path=None, v
         # Se la ricostruzione sul validation migliora, salva il checkpoint del modello.
         if val['reconstruction'] < best:
             best, stale = val['reconstruction'], 0
+            # Copia dei pesi migliori in memoria: senza path il modello
+            # resterebbe altrimenti ai pesi dell'ultima epoca.
+            best_state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
             if path: torch.save(model.state_dict(), path)
         else: stale += 1
         print(f"Epoch {epoch+1}/{epochs}: train={train['loss']:.6f} val_rec={val['reconstruction']:.6f} val_kl={val['kl']:.6f}")
         # Early stopping: ferma l'addestramento se non ci sono miglioramenti per `patience` epoche.
         if stale >= patience: break
-    # Ripristina i pesi salvati durante l'addestramento (se esiste il checkpoint).
-    if path and Path(path).exists(): model.load_state_dict(torch.load(path, map_location=device))
+    # Ripristina i pesi migliori visti sul validation set.
+    if best_state is not None: model.load_state_dict(best_state)
     return history
