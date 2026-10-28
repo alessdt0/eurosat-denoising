@@ -1,0 +1,438 @@
+% ---------------------------------------------------------------------------
+%  Denoising di immagini satellitari EuroSAT: AutoEncoder vs VAE
+%  Project work -- presentazione Beamer (16:9)
+%  Compilare con: pdflatex slides.tex  (due volte)
+% ---------------------------------------------------------------------------
+\documentclass[aspectratio=169]{beamer}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+
+\graphicspath{{../outputs/report/}}
+
+% ------------------------------- Colori ------------------------------------
+\definecolor{primary}{RGB}{20,62,102}
+\definecolor{accent}{RGB}{206,110,40}
+\definecolor{ink}{RGB}{35,42,52}
+\definecolor{muted}{RGB}{95,105,118}
+
+% ------------------------------- Tema --------------------------------------
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+
+\setbeamercolor{normal text}{fg=ink,bg=white}
+\setbeamercolor{structure}{fg=primary}
+\setbeamercolor{frametitle}{fg=white,bg=primary}
+\setbeamercolor{title}{fg=primary}
+\setbeamercolor{subtitle}{fg=muted}
+\setbeamercolor{itemize item}{fg=accent}
+\setbeamercolor{itemize subitem}{fg=primary!70}
+\setbeamercolor{block title}{fg=white,bg=primary}
+\setbeamercolor{block body}{fg=ink,bg=primary!5}
+\setbeamercolor{block title alerted}{fg=white,bg=accent}
+\setbeamercolor{block body alerted}{fg=ink,bg=accent!7}
+\setbeamercolor{caption name}{fg=primary}
+\setbeamercolor{footline}{fg=muted,bg=white}
+
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamerfont{title}{size=\LARGE,series=\bfseries}
+\setbeamerfont{block title}{size=\normalsize,series=\bfseries}
+\setbeamerfont{caption}{size=\scriptsize}
+\setbeamerfont{footline}{size=\scriptsize}
+
+% --------------------------- Titolo delle slide ----------------------------
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip%
+  \begin{beamercolorbox}[wd=\textwidth,ht=3.2ex,dp=1.5ex,leftskip=0.45cm,rightskip=0.3cm]{frametitle}%
+    \usebeamerfont{frametitle}\insertframetitle%
+  \end{beamercolorbox}%
+  \nointerlineskip%
+  {\color{accent}\rule{\textwidth}{1pt}}%
+  \vspace{0.28cm}%
+}
+
+% ------------------------------- Footer ------------------------------------
+\setbeamertemplate{footline}{%
+  \hbox{\color{primary!20}\rule{\paperwidth}{0.4pt}}%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.36\paperwidth,ht=2.6ex,dp=1.3ex,leftskip=1cm]{footline}%
+      \usebeamerfont{footline}Alessandro\,\textcolor{primary!30}{|}\,Project work%
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.46\paperwidth,ht=2.6ex,dp=1.3ex,center]{footline}%
+      \usebeamerfont{footline}Denoising EuroSAT: AE vs VAE%
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.18\paperwidth,ht=2.6ex,dp=1.3ex,right,rightskip=1cm]{footline}%
+      \usebeamerfont{footline}\insertframenumber\,/\,\inserttotalframenumber%
+    \end{beamercolorbox}%
+  }%
+  \vspace{0.06cm}%
+}
+
+% ---------------------------- Stile blocchi --------------------------------
+\setbeamertemplate{blocks}[rounded][shadow=false]
+\setbeamertemplate{caption}{\insertcaption}
+
+% ------------------------- Comandi di comodo -------------------------------
+\newenvironment{points}{%
+  \begin{itemize}\setlength{\itemsep}{0.35em}\setlength{\parskip}{0pt}%
+}{\end{itemize}}
+
+\newcommand{\tick}{\textcolor{accent}{\rule[0.45ex]{0.45em}{0.45em}}}
+\newcommand{\fig}[3][12.2cm]{%
+  \begin{figure}\centering
+    \includegraphics[width=#1]{#2}%
+    \caption{#3}%
+  \end{figure}%
+}
+
+\setlength{\emergencystretch}{2em}
+\setlength{\parskip}{0pt}
+
+% ------------------------------- Metadati ----------------------------------
+\title[Denoising EuroSAT: AE vs VAE]{Denoising di immagini satellitari EuroSAT:\\AutoEncoder vs VAE}
+\subtitle{Project work}
+\author{Alessandro}
+\date{Ottobre 2026}
+
+\begin{document}
+
+% =============================== 1. Titolo ==================================
+\begin{frame}[plain]
+  \vspace*{-1cm}%
+  \noindent\makebox[0pt][l]{\hspace*{-1cm}%
+    \setlength{\fboxsep}{0pt}%
+    \colorbox{primary}{%
+      \parbox[c][5.2cm][c]{\paperwidth}{%
+        \hspace*{1.4cm}%
+        \begin{minipage}{12.4cm}
+          {\color{white!70!primary}\small\bfseries PROJECT WORK}\\[0.55em]
+          {\color{white}\LARGE\bfseries Denoising di immagini satellitari}\\[0.20em]
+          {\color{white}\LARGE\bfseries EuroSAT: AutoEncoder vs VAE}
+        \end{minipage}%
+      }%
+    }%
+  }%
+
+  \vspace{0.95cm}
+  {\large\color{primary}\bfseries Project work}\\[0.35em]
+  {\color{muted}Confronto tra autoencoder deterministico e variazionale\\sul dataset EuroSAT}
+
+  \vfill
+  {\large\color{ink}\bfseries Alessandro}\\[0.25em]
+  {\color{muted}Ottobre 2026}
+\end{frame}
+
+% ============================== 2. Obiettivo ================================
+\begin{frame}{Obiettivo}
+  \begin{points}
+    \item Ripristinare immagini satellitari degradate da rumore e sfocatura.
+    \item Trattare il denoising come ricostruzione immagine-to-immagine:
+          input degradato, target pulito.
+    \item Confrontare un \textbf{AutoEncoder deterministico} e un
+          \textbf{VAE} regolarizzato, a parità di budget.
+    \item Misurare la qualità con MSE, PSNR e SSIM, sempre rispetto a una
+          \textbf{baseline rumorosa}.
+  \end{points}
+
+  \vspace{0.35cm}
+  \begin{block}{Domanda di ricerca}
+    Il VAE è competitivo quanto l'AE quando il compito è il denoising, e a
+    quali livelli di degrado conviene davvero applicare un modello?
+  \end{block}
+\end{frame}
+
+% =============================== 3. Dataset =================================
+\begin{frame}{Dataset EuroSAT}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.56\textwidth}
+      \begin{points}
+        \item 27.000 immagini RGB $64\times64$, 10 classi di uso del suolo.
+        \item Split stratificato 70/15/15 con seed 42.
+        \item Target: immagine pulita; input: versione degradata.
+        \item Pixel normalizzati in $[0,1]$.
+      \end{points}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \vspace{0.15cm}
+      \centering
+      \small
+      \renewcommand{\arraystretch}{1.25}
+      \begin{tabular}{lrr}
+        \toprule
+        Split & Immagini & \% \\
+        \midrule
+        Training   & 18.900 & 70 \\
+        Validation &  4.050 & 15 \\
+        Test       &  4.050 & 15 \\
+        \midrule
+        Totale     & 27.000 & 100 \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.30cm}
+  {\small\color{muted}La stratificazione preserva la proporzione delle classi in ogni partizione.}
+\end{frame}
+
+% =============================== 4. Degrado =================================
+\begin{frame}{Il degrado}
+  \begin{points}
+    \item Rumore gaussiano additivo: $\sigma \in \{0.05,\;0.15,\;0.30\}$.
+    \item Blur gaussiano opzionale \emph{prima} del rumore:
+          $\sigma_b \in \{0.5,\;1.0,\;2.0\}$, kernel $5\times5$.
+    \item 9 condizioni di degrado per modello; clip finale in $[0,1]$.
+  \end{points}
+
+  \vspace{0.15cm}
+  \fig[12.4cm]{example_degradation.png}{Originale e tre livelli di rumore gaussiano ($\sigma=0.05,\,0.15,\,0.30$).}
+\end{frame}
+
+% ============================ 5. Architetture ===============================
+\begin{frame}{Le due architetture}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{ConvAutoencoder}
+        \begin{itemize}
+          \item Encoder $3\to32\to64$, stride 2.
+          \item Latente di 64 dimensioni.
+          \item Decoder con conv transpose e sigmoid.
+          \item Mappa deterministica input $\to$ output.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{ConvVAE}
+        \begin{itemize}
+          \item Stesso encoder dell'AE.
+          \item Teste $\mu$ e $\log\sigma^2$.
+          \item Reparameterization: $z=\mu+\sigma\odot\varepsilon$.
+          \item Valutazione con $z=\mu$, senza campionamento.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.25cm}
+  \centering
+  \setlength{\fboxsep}{5pt}%
+  \colorbox{primary!7}{\parbox[c][0.95cm][c]{4.3cm}{\centering\scriptsize Encoder\\ $3\to32\to64$, stride 2}}\quad
+  $\longrightarrow$\quad
+  \colorbox{accent!12}{\parbox[c][0.95cm][c]{2.1cm}{\centering\scriptsize latente\\ 64}}\quad
+  $\longrightarrow$\quad
+  \colorbox{primary!7}{\parbox[c][0.95cm][c]{4.3cm}{\centering\scriptsize Decoder\\ conv transpose, sigmoid}}
+
+  \vspace{0.25cm}
+  {\small\color{muted}L'AE apprende una mappa deterministica; il VAE uno spazio latente probabilistico regolarizzato verso la prior.}
+\end{frame}
+
+% =========================== 6. Loss e protocollo ===========================
+\begin{frame}{Loss e protocollo}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.46\textwidth}
+      \begin{block}{AutoEncoder}
+        \centering
+        \small
+        $\mathcal{L}_{\mathrm{AE}} = \mathrm{MSE}(\hat{x}, x)$\\[0.15em]
+        {\scriptsize Nessuna regolarizzazione.}
+      \end{block}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{block}{VAE}
+        \centering
+        \scriptsize
+        $\mathcal{L}_{\mathrm{VAE}} = \mathrm{MSE}(\hat{x},x)
+        + \beta\,\mathrm{KL}\!\left(q(z|x)\,\|\,\mathcal{N}(0,I)\right)$\\[0.15em]
+        {$\beta = 10^{-4}$, latente 64.}
+      \end{block}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.15cm}
+  \begin{points}
+    \item 18 esperimenti: 3 livelli di rumore $\times$ 3 blur $\times$ 2 modelli.
+    \item 5 epoche, batch 128, Adam con learning rate $10^{-3}$.
+    \item Early stopping con patience 3; checkpoint sul validation MSE.
+    \item Rumore di validation e test generato con seed fissi.
+  \end{points}
+\end{frame}
+
+% ============================== 7. Metriche =================================
+\begin{frame}{Metriche}
+  \centering
+  \small
+  \renewcommand{\arraystretch}{1.28}
+  \begin{tabular}{lll}
+    \toprule
+    Metrica & Cosa misura & Ruolo \\
+    \midrule
+    MSE  & errore quadratico medio            & globale \\
+    PSNR & $10\log_{10}\!\left(1/\mathrm{MSE}\right)$ & dB \\
+    SSIM & similarità strutturale             & media $\pm$ dev. std \\
+    KL   & distanza dalla prior gaussiana     & solo VAE \\
+    Baseline & immagine rumorosa non elaborata & riferimento \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{0.40cm}
+  \begin{block}{Criterio di utilità}
+    Un modello di denoising è utile \textbf{solo se batte la baseline rumorosa}:
+    altrimenti conviene lasciare l'immagine così com'è.
+  \end{block}
+\end{frame}
+
+% ========================= 8. Panoramica risultati ==========================
+\begin{frame}{Panoramica dei risultati}
+  \fig[12.3cm]{psnr_bars.png}{PSNR (dB) per le 9 configurazioni di degrado, AE e VAE.}
+  \vspace{0.10cm}
+  \begin{points}
+    \item PSNR stabile tra 23,61 e 24,58 dB su tutte le configurazioni.
+    \item AE migliore in 8 casi su 9; distacco massimo 0,58 dB.
+  \end{points}
+\end{frame}
+
+% ========================== 9. PSNR vs rumore ===============================
+\begin{frame}{PSNR al variare del rumore}
+  \fig[12.0cm]{psnr_vs_noise.png}{PSNR al crescere del rumore, per i tre livelli di blur.}
+  \vspace{0.10cm}
+  \begin{points}
+    \item Baseline: da 25,89 dB ($\sigma=0.05$) a 11,69 dB ($\sigma=0.30$), blur 0,5.
+    \item Modelli: banda stretta 23,6--24,6 dB, quasi indipendente dal rumore.
+    \item Il vantaggio dei modelli cresce con l'intensità del degrado.
+  \end{points}
+\end{frame}
+
+% ======================= 10. Guadagno vs baseline ===========================
+\begin{frame}{Guadagno rispetto alla baseline}
+  \fig[12.0cm]{psnr_gain.png}{Guadagno di PSNR rispetto all'immagine rumorosa (dB).}
+  \vspace{0.10cm}
+  \begin{points}
+    \item $\sigma=0.05$: AE $-1{,}31/-0{,}41/+0{,}14$ dB, VAE $-1{,}54/-0{,}67/-0{,}44$ dB.
+    \item $\sigma=0.15$: circa $+7{,}5$ dB; \ $\sigma=0.30$: circa $+12$ dB.
+    \item Valori riferiti a blur 0,5 / 1,0 / 2,0.
+  \end{points}
+\end{frame}
+
+% ============================= 11. AE vs VAE ================================
+\begin{frame}{AE vs VAE}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \small
+      \renewcommand{\arraystretch}{1.25}
+      \begin{tabular}{lccc}
+        \toprule
+        $\sigma$ & blur 0,5 & blur 1,0 & blur 2,0 \\
+        \midrule
+        0,05 & $-0{,}22$ & $-0{,}26$ & $-0{,}58$ \\
+        0,15 & $-0{,}14$ & $-0{,}17$ & $-0{,}04$ \\
+        0,30 & $-0{,}04$ & $+0{,}14$ & $-0{,}15$ \\
+        \bottomrule
+      \end{tabular}\\[0.15em]
+      {\scriptsize\color{muted}$\Delta$PSNR $=$ VAE $-$ AE (dB)}
+
+      \vspace{0.35cm}
+      \begin{points}
+        \item AE vince in 8 configurazioni su 9.
+        \item Unico vantaggio VAE: $\sigma=0.30$, blur 1,0 ($+0{,}14$ dB).
+      \end{points}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{ae_vs_vae_psnr.png}\\[0.1em]
+      {\scriptsize\color{muted}PSNR VAE vs AE; la diagonale indica la parità.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================== 12. KL VAE =================================
+\begin{frame}{La KL del VAE}
+  \fig[12.0cm]{kl_bars.png}{KL del VAE rispetto alla prior gaussiana, per configurazione.}
+  \vspace{0.10cm}
+  \begin{points}
+    \item KL compresa tra 2,50 e 2,72 in tutte le configurazioni.
+    \item $\beta=10^{-4}$: regolarizzazione attiva ma debole.
+    \item Costo medio di fedeltà del VAE: circa 0,16 dB.
+  \end{points}
+\end{frame}
+
+% ============================= 13. Discussione ==============================
+\begin{frame}{Discussione}
+  \begin{points}
+    \item Il denoising conviene solo con rumore sufficientemente forte
+          ($\sigma \geq 0.15$).
+    \item A rumore basso il limite è la capacità ricostruttiva ($\sim$24 dB),
+          non il rumore.
+    \item A $\sigma=0.05$ la baseline è già a 25--26 dB: difficile da battere.
+    \item Il VAE paga un piccolo costo di fedeltà per la regolarizzazione latente.
+    \item Il divario AE--VAE si riduce al crescere del rumore.
+  \end{points}
+
+  \vspace{0.30cm}
+  \begin{block}{In sintesi}
+    A parità di budget l'AE è la scelta di default; il VAE ha senso se serve
+    uno spazio latente utilizzabile per generazione o analisi.
+  \end{block}
+\end{frame}
+
+% ================================ 14. Limiti ================================
+\begin{frame}{Limiti}
+  \begin{points}
+    \item 5 epoche di training: modelli probabilmente non saturi.
+    \item Singolo seed: nessuna stima della variabilità.
+    \item Architettura semplice, senza skip connections.
+    \item Solo rumore e blur gaussiani, poco realistici.
+    \item Metriche solo pixel-wise: niente LPIPS, niente analisi per classe.
+  \end{points}
+
+  \vspace{0.30cm}
+  {\small\color{muted}I limiti non invalidano il confronto, che è a parità di condizioni, ma ne delimitano la portata.}
+\end{frame}
+
+% ======================= 15. Conclusioni e sviluppi =========================
+\begin{frame}{Conclusioni e sviluppi}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Conclusioni}
+        \begin{itemize}
+          \item Guadagno fino a $+12$ dB, ma solo con rumore forte.
+          \item AE leggermente preferibile a parità di budget.
+          \item VAE utile se serve uno spazio latente generativo.
+          \item Il tetto è la capacità dell'architettura.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Sviluppi}
+        \begin{itemize}
+          \item Skip connections o architettura U-Net.
+          \item Più epoche e più seed.
+          \item Condizionamento sul livello di rumore.
+          \item FFDNet / DnCNN e metriche percettive.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.25cm}
+  \centering
+  {\color{primary}\bfseries Il denoising paga quando il degrado supera il limite ricostruttivo del modello.}
+\end{frame}
+
+% ================================ 16. Grazie ================================
+\begin{frame}[plain]
+  \centering
+  \vspace*{1.4cm}
+  {\color{accent}\rule{2.4cm}{2.5pt}}\\[0.9em]
+  {\usebeamerfont{title}\color{primary}Grazie}\\[0.6em]
+  {\large\color{muted}Domande?}\\[2.2em]
+  {\small\color{muted}Denoising di immagini satellitari EuroSAT: AutoEncoder vs VAE}\\[0.25em]
+  {\small\color{muted}Alessandro --- Ottobre 2026}
+\end{frame}
+
+\end{document}

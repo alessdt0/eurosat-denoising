@@ -28,6 +28,8 @@ REQUIRED_FIELDS = (
 CONFIG_FIELDS = ("model", "noise_std", "blur_sigma", "epochs", "beta", "seed")
 # Modelli confrontati dal report.
 MODELS = ("ae", "vae")
+# Etichette leggibili delle metriche, usate nei grafici.
+METRIC_LABELS = {"mse": "MSE", "psnr": "PSNR (dB)", "ssim_mean": "SSIM", "kl": "KL"}
 
 
 def load_results(sweep_dir):
@@ -236,8 +238,10 @@ def plot_metric_bars(results, metric, save_path=None, ylabel=None, title=None):
         ax.bar(positions + offset, values, width, label=model.upper())
     ax.set_xticks(positions)
     ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel(ylabel or metric)
-    ax.set_title(title or f"{metric} per configurazione di degrado")
+    # Etichetta leggibile della metrica (PSNR/MSE/SSIM/KL).
+    label = METRIC_LABELS.get(metric, metric)
+    ax.set_ylabel(ylabel or label)
+    ax.set_title(title or f"{label} per configurazione di degrado")
     ax.grid(axis="y", alpha=0.25)
     ax.legend()
     fig.tight_layout()
@@ -279,10 +283,11 @@ def plot_metric_vs_noise(results, metric, save_path=None):
                 ax.plot(xs, ys, linestyle="--", color="gray", label="baseline")
         ax.set_title("no blur" if blur_sigma is None else f"blur {blur_sigma:g}")
         ax.set_xlabel("noise std")
-        ax.set_ylabel(metric)
+        label = METRIC_LABELS.get(metric, metric)
+        ax.set_ylabel(label)
         ax.grid(alpha=0.25)
         ax.legend()
-    fig.suptitle(f"{metric} al variare del rumore")
+    fig.suptitle(f"{METRIC_LABELS.get(metric, metric)} al variare del rumore")
     fig.tight_layout()
     if save_path is not None:
         fig.savefig(save_path, dpi=150)
@@ -339,9 +344,10 @@ def plot_ae_vs_vae_scatter(results, metric="psnr", save_path=None):
     high = max(max(xs), max(ys))
     pad = 0.05 * (high - low or 1.0)
     ax.plot([low - pad, high + pad], [low - pad, high + pad], linestyle="--", color="gray", label="parita'")
-    ax.set_xlabel(f"{metric} AE")
-    ax.set_ylabel(f"{metric} VAE")
-    ax.set_title(f"Confronto diretto {metric}: AE vs VAE")
+    label = METRIC_LABELS.get(metric, metric)
+    ax.set_xlabel(f"{label} AE")
+    ax.set_ylabel(f"{label} VAE")
+    ax.set_title(f"Confronto diretto {label}: AE vs VAE")
     ax.grid(alpha=0.25)
     ax.legend()
     fig.tight_layout()
