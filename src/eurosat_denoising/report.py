@@ -48,9 +48,9 @@ def load_results(sweep_dir):
 
 
 def corruption_label(noise_std, blur_sigma):
-    """Etichetta leggibile di una configurazione di degrado."""
-    blur_part = "no blur" if blur_sigma is None else f"blur {blur_sigma:g}"
-    return f"noise {noise_std:g}\n{blur_part}"
+    """Etichetta compatta di una configurazione di degrado."""
+    blur_part = "senza blur" if blur_sigma is None else f"blur {blur_sigma:g}"
+    return f"σ={noise_std:g}, {blur_part}"
 
 
 def validate_results(results):
@@ -237,7 +237,7 @@ def plot_metric_bars(results, metric, save_path=None, ylabel=None, title=None):
             values.append(float("nan") if record is None else record[metric])
         ax.bar(positions + offset, values, width, label=model.upper())
     ax.set_xticks(positions)
-    ax.set_xticklabels(labels, fontsize=9)
+    ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
     # Etichetta leggibile della metrica (PSNR/MSE/SSIM/KL).
     label = METRIC_LABELS.get(metric, metric)
     ax.set_ylabel(ylabel or label)
@@ -281,8 +281,8 @@ def plot_metric_vs_noise(results, metric, save_path=None):
                     ys.append(record[baseline_field])
             if xs:
                 ax.plot(xs, ys, linestyle="--", color="gray", label="baseline")
-        ax.set_title("no blur" if blur_sigma is None else f"blur {blur_sigma:g}")
-        ax.set_xlabel("noise std")
+        ax.set_title("senza blur" if blur_sigma is None else f"blur {blur_sigma:g}")
+        ax.set_xlabel("rumore ($\\sigma$)")
         label = METRIC_LABELS.get(metric, metric)
         ax.set_ylabel(label)
         ax.grid(alpha=0.25)
@@ -313,7 +313,7 @@ def plot_baseline_gain(results, save_path=None):
         ax.bar(positions + offset, gains, width, label=model.upper())
     ax.axhline(0, color="black", linewidth=0.8)
     ax.set_xticks(positions)
-    ax.set_xticklabels(labels, fontsize=9)
+    ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
     ax.set_ylabel("PSNR gain vs baseline (dB)")
     ax.set_title("Miglioramento rispetto all'immagine rumorosa")
     ax.grid(axis="y", alpha=0.25)

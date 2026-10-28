@@ -41,6 +41,18 @@ python -m eurosat_denoising.report --sweep-dir outputs/sweep --output-dir output
 
 The report validates all sweep JSONs (required fields, filename/parameter coherence, metric sanity, baseline consistency, complete AE/VAE pairs), prints the experiment table and the AE vs VAE comparison, and saves `results.csv`, `summary.json`, `validation.txt` plus PNG plots (PSNR/MSE/SSIM bars, PSNR gain vs baseline, PSNR vs noise, AE vs VAE scatter). The notebook `notebooks/04_sweep_analysis.ipynb` uses the same functions for an interactive exploration.
 
+## Presentazione
+
+`presentation/slides.tex` is a 16:9 Beamer deck (16 slides) that compiles to `presentation/slides.pdf`; the spoken script is in `presentation/discorso.md`. Figures are read from `outputs/report/`.
+
+```bash
+cd presentation
+pdflatex -interaction=nonstopmode slides.tex
+pdflatex -interaction=nonstopmode slides.tex
+```
+
+Compile twice to update the total slide count in the footer. See `presentation/README.md` for requirements and customization.
+
 
 ## Notebooks
 
